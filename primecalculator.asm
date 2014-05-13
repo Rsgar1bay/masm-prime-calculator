@@ -10,7 +10,7 @@ TITLE Prime Calculator			(primecalculator.asm)
 ;	lists the first n primes, with twin primes indicated with an asterisk on the second twin
 ; Author: Sam Snyder
 ; Date Created: 5/7/2014
-; Last Modification Date:
+; Last Modification Date: 5/11/13
 ; Example Output
 COMMENT !
 Prime Calculator Programmed by Sam Snyder 
@@ -35,8 +35,8 @@ Results certified by Sam Snyder. Goodbye.
 INCLUDE Irvine32.inc
 
 ;Constants
-UPPER_LIMIT = 300;Upper limit as constant
-PRIMES_PER_LINE = 10
+UPPER_LIMIT EQU 300;Upper limit as constant
+PRIMES_PER_LINE EQU 10
 
 .data
 ;Title message
@@ -55,10 +55,15 @@ getInputMessage2 BYTE "]: ", 0
 invalidInputMessage BYTE "Out of range. Try again.", 0
 
 ;for displaying primes
-primesPerLine DWORD PRIMES_PER_LINE
+currentNumber DWORD 0
+prevPrime DWORD 1
+printedPrimes DWORD 0
+primesPerLine DWORD 10
 starChar BYTE '*',0
 threeSpaces BYTE "   ",0
 
+;Farewell
+farewellMessage BYTE "Results certified by Sam Snyder. Goodbye.",0
 .code
 main PROC
 
@@ -130,8 +135,7 @@ validateInput PROC USES edx
 ;Receives: ebx = number of primes
 ;Returns: ebx = post-validation number of primes
 ;----------------------------------------------------------------------
-	call dumpregs
-
+	cmp ebx, 1
 	jl invalidData; 
 	
 	cmp ebx, UPPER_LIMIT
@@ -151,31 +155,37 @@ validateInput PROC USES edx
 validateInput ENDP
 
 ;----------------------------------------------------------------------
-showPrimes PROC USES eax esi edi
+showPrimes PROC USES eax ebx edx 
 ;Receives: ebx = numnber of primes to show
 ;Returns: None
 ;Preconditions: number of primes is a positive number between 1 and 
 ; UPPER_LIMIT
 ;----------------------------------------------------------------------
 	mov ecx, ebx
-	mov esi, 0; esi will be used as counter for printed primes
-	mov edi, 1; edi will be used as counter for candidate numbers
-	push 1; first prime, stack used for finding first twin prime
+	CounterLoop: ;loop, up to user number
+		NextNumber:
 
-	CounterLoop: ;loop, up to user numner
+		inc currentNumber
+		mov eax, currentNumber
 		call isPrime
 		cmp eax, 0
-		je InputNotPrime
+		jne InputIsPrime
+
+		InputNotPrime:
+				jmp NextNumber
 
 		InputIsPrime:
-			mov eax, edi
-			call WriteInt; Print prime to screen
+			mov eax, currentNumber
+			call WriteDec; Print prime to screen
+			inc printedPrimes
 
 			;Is it a twin prime?
-			pop eax; pop previous prime
-			push edi; push current prime
-			sub eax, 2
-			cmp eax, edi
+			mov eax, prevPrime
+			mov ebx, currentNumber 
+			sub ebx, eax
+			mov eax, currentNumber
+			mov prevPrime, eax
+			cmp ebx, 2
 			jne NotTwin
 			
 			IsTwin:
@@ -186,47 +196,74 @@ showPrimes PROC USES eax esi edi
 				;don't need to print '*'
 
 				;Do we need to create a new line?
-				mov eax, edi
+				mov eax, printedPrimes
+				mov edx, 0
 				div primesPerLine
-				cmp edx, 0
-				jne NoNewLine
-			
-				inc esi; increment print counter before priting
+				cmp dx, 0
+					je NewLine
+
+			;print spaces between primes
+				mov edx, OFFSET threeSpaces
+				call WriteString; 3 spaces
+				jmp EndOfLoop
 
 			NewLine:
 				call Crlf; end of line after 10 primes
-
-			NoNewLine:
-				;print spaces between primes
-				mov edx, OFFSET threeSpaces
-				call WriteString; 3 spaces
-			InputNotPrime:
-				;skip printing candidate number
-
-				inc esi;increment candidate prime
-				call DumpRegs
-		loop CounterLoop
 			
+			EndOfLoop:						
 
-
-	ret
+		loop CounterLoop
+		ret
 showPrimes ENDP
 
 ;----------------------------------------------------------------------
-isPrime PROC
+isPrime PROC USES ebx ecx edx
+;Receives EAX=number to investigate if prime
+;Returns EAX=0 if not prime
 ;----------------------------------------------------------------------
-	;loop n/i, initial i=n/2
 	
-	;if remainder is 0, not prime
+	mov ebx, eax ;make a copy of target number
 	
-	;end loop
-	;survived loop, number is prime
+	;1 2 3are prime
+	cmp ebx, 1 
+		je TruePrime
+	cmp ebx, 2
+		je TruePrime
+	cmp ebx, 3
+		je TruePrime
+
+	mov ecx, 2
+	mov edx, 0
+	div ecx; initialize loop to n/2
+	mov ecx, eax;
+
+
+
+	IsPrimeLoop:
+		mov eax, ebx ; mov target into eax for division
+		cmp ecx, 1
+			je TruePrime; if we made it to ecx=1, not prime
+		mov edx, 0
+		div ecx;
+		cmp edx, 0;if remainder is 0, not prime
+			je NotPrime
+	loop IsPrimeLoop
+		jmp TruePrime;survived loop, number is prime
+
+	NotPrime:
+		mov eax, 0; return value of 0 for not prime
+	TruePrime:
+		;nothing to do, eax is not 0
 	ret
 isPrime ENDP
 ;----------------------------------------------------------------------
-farewell PROC
+farewell PROC USES edx
+;Receives: nothing
+;Returns: nothing
 ;----------------------------------------------------------------------
+	mov edx, OFFSET farewellMessage
 	call WriteString; Results certified by Sam Snyder. Goodbye.
+	call Crlf
 	ret
 farewell ENDP
 
